@@ -1,0 +1,41 @@
+class AppRoutes {
+  const AppRoutes._();
+
+  static const splash = '/';
+  static const onboarding = '/onboarding';
+  static const login = '/login';
+  static const register = '/register';
+  static const forgotPassword = '/forgot-password';
+  static const emailVerification = '/email-verification';
+  static const roleSelection = '/role-selection';
+  static const patientHome = '/patient';
+  static const specialties = '/patient/specialties';
+  static const doctors = '/patient/doctors';
+  static const doctorDetails = '/patient/doctors/:doctorId';
+  static const bookAppointment = '/patient/doctors/:doctorId/book';
+  static const appointments = '/patient/appointments';
+  static const appointmentDetails = '/patient/appointments/:appointmentId';
+  static const appointmentChat = '/appointments/:appointmentId/chat';
+  static const favoriteDoctors = '/patient/favorites';
+  static const patientProfile = '/patient/profile';
+  static const patientPayments = '/patient/payments';
+  static const prescriptions = '/patient/prescriptions';
+  static const medicalRecords = '/patient/medical-records';
+  static const notifications = '/notifications';
+  static const emergency = '/patient/emergency';
+  static const healthTips = '/patient/health-tips';
+  static const healthTipDetails = '/patient/health-tips/:tipId';
+  static const videoCall = '/video-call/:appointmentId';
+  static const doctorDashboard = '/doctor';
+  static const doctorPatientDetails = '/doctor/patients/:appointmentId';
+  static const doctorAvailability = '/doctor/availability';
+  static const doctorEarnings = '/doctor/earnings';
+  static const doctorProfile = '/doctor/profile';
+  static const prescriptionEditor = '/doctor/prescriptions/:appointmentId/edit';
+  static const adminDashboard = '/admin';
+  static const adminUsers = '/admin/users';
+  static const adminDoctors = '/admin/doctors';
+  static const adminAppointments = '/admin/appointments';
+  static const adminPayments = '/admin/payments';
+  static const adminHealthTips = '/admin/health-tips';
+}
