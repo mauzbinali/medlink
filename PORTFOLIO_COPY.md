@@ -1,5 +1,12 @@
 # MedLink Portfolio Copy
 
+> Accuracy note: these are portfolio demo workflows, not a deployed clinical
+> backend. Persistence is write-only with seed/local state and no full remote
+> hydration. Report picker/uploads are not wired, payments have no gateway,
+> video is intentionally mocked, and admin provisioning must be privileged,
+> not self-signup. Do not present the copy below as production readiness.
+> See `README.md` and `AUDIT_REMAINING_ITEMS.md` for current limitations.
+
 ## LinkedIn
 
 ### Headline

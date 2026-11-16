@@ -27,6 +27,9 @@ class AppointmentBookingScreen extends ConsumerStatefulWidget {
 class _AppointmentBookingScreenState
     extends ConsumerState<AppointmentBookingScreen> {
   DateTime selectedDay = DateTime.now();
+  DateTime focusedDay = DateTime.now();
+  bool initializedType = false;
+  bool booked = false;
   String consultationType = 'Clinic Visit';
   String selectedSlot = '10:00 AM';
   String paymentMethod = 'Cash at Clinic';
@@ -82,6 +85,13 @@ class _AppointmentBookingScreenState
       );
     }
     final doctor = matches.first;
+    if (!initializedType) {
+      initializedType = true;
+      if (doctor.isOnlineAvailable &&
+          GoRouterState.of(context).uri.queryParameters['type'] == 'online') {
+        consultationType = 'Online Consultation';
+      }
+    }
     final records = ref.watch(appControllerProvider).medicalRecords;
 
     return Scaffold(
@@ -103,14 +113,15 @@ class _AppointmentBookingScreenState
           _Block(
             title: 'Consultation Type',
             child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
+              segments: [
+                const ButtonSegment(
                   value: 'Clinic Visit',
                   label: Text('Clinic'),
                   icon: Icon(Iconsax.hospital),
                 ),
                 ButtonSegment(
                   value: 'Online Consultation',
+                  enabled: doctor.isOnlineAvailable,
                   label: Text('Online'),
                   icon: Icon(Iconsax.video),
                 ),
@@ -124,13 +135,19 @@ class _AppointmentBookingScreenState
           _Block(
             title: 'Select Date',
             child: TableCalendar<void>(
-              focusedDay: selectedDay,
-              firstDay: DateTime.now(),
-              lastDay: DateTime.now().add(const Duration(days: 60)),
+              focusedDay: focusedDay,
+              firstDay: DateUtils.dateOnly(DateTime.now()),
+              lastDay: DateUtils.dateOnly(
+                DateTime.now(),
+              ).add(const Duration(days: 60)),
               selectedDayPredicate: (day) => isSameDay(day, selectedDay),
               onDaySelected: (selected, focused) {
-                setState(() => selectedDay = selected);
+                setState(() {
+                  selectedDay = DateUtils.dateOnly(selected);
+                  focusedDay = focused;
+                });
               },
+              onPageChanged: (day) => focusedDay = day,
               headerStyle: const HeaderStyle(formatButtonVisible: false),
               calendarStyle: const CalendarStyle(
                 selectedDecoration: BoxDecoration(
@@ -291,44 +308,51 @@ class _AppointmentBookingScreenState
           SizedBox(
             height: 54,
             child: FilledButton.icon(
-              onPressed: () {
-                final age = int.tryParse(ageController.text);
-                if (nameController.text.trim().isEmpty ||
-                    phoneController.text.trim().isEmpty ||
-                    symptomsController.text.trim().isEmpty ||
-                    age == null ||
-                    age <= 0) {
-                  setState(
-                    () => formError =
-                        'Enter patient name, valid age, phone, and symptoms.',
-                  );
-                  return;
-                }
-                setState(() => formError = null);
-                final appointment = ref
-                    .read(appControllerProvider.notifier)
-                    .createAppointment(
-                      patientName: nameController.text.trim(),
-                      patientAge: age,
-                      patientGender: gender,
-                      patientPhone: phoneController.text.trim(),
-                      doctorId: doctor.id,
-                      consultationType: consultationType,
-                      date: selectedDay,
-                      timeSlot: selectedSlot,
-                      symptoms: symptomsController.text.trim(),
-                      notes: notesController.text.trim(),
-                      reportNames: selectedReportNames.isEmpty
-                          ? const ['uploaded-report.pdf']
-                          : selectedReportNames.toList(),
-                      fee: doctor.fee,
-                      paymentMethod: paymentMethod,
-                    );
-                ref
-                    .read(appControllerProvider.notifier)
-                    .bookAppointment(appointment);
-                _showBookingSuccess(context);
-              },
+              onPressed: booked
+                  ? null
+                  : () {
+                      final age = int.tryParse(ageController.text);
+                      if (nameController.text.trim().isEmpty ||
+                          phoneController.text.trim().isEmpty ||
+                          symptomsController.text.trim().isEmpty ||
+                          age == null ||
+                          age <= 0) {
+                        setState(
+                          () => formError =
+                              'Enter patient name, valid age, phone, and symptoms.',
+                        );
+                        return;
+                      }
+                      setState(() => formError = null);
+                      try {
+                        final appointment = ref
+                            .read(appControllerProvider.notifier)
+                            .createAppointment(
+                              patientName: nameController.text.trim(),
+                              patientAge: age,
+                              patientGender: gender,
+                              patientPhone: phoneController.text.trim(),
+                              doctorId: doctor.id,
+                              consultationType: consultationType,
+                              date: selectedDay,
+                              timeSlot: selectedSlot,
+                              symptoms: symptomsController.text.trim(),
+                              notes: notesController.text.trim(),
+                              reportNames: selectedReportNames.toList(),
+                              fee: doctor.fee,
+                              paymentMethod: paymentMethod,
+                            );
+                        ref
+                            .read(appControllerProvider.notifier)
+                            .bookAppointment(appointment);
+                        setState(() => booked = true);
+                        _showBookingSuccess(context);
+                      } on StateError catch (error) {
+                        setState(() => formError = error.message);
+                      } on ArgumentError catch (error) {
+                        setState(() => formError = '${error.message}');
+                      }
+                    },
               icon: const Icon(Iconsax.tick_circle),
               label: const Text('Confirm Booking'),
             ),
@@ -341,9 +365,13 @@ class _AppointmentBookingScreenState
   void _showBookingSuccess(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      isDismissible: false,
+      enableDrag: false,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (sheetContext) {
-        return Padding(
+        return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,

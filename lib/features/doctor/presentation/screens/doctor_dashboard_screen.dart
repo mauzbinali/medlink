@@ -28,6 +28,9 @@ class DoctorDashboardScreen extends ConsumerWidget {
     final completed = appointments
         .where((item) => item.status == AppointmentStatus.completed)
         .toList();
+    final todayConfirmed = confirmed
+        .where((item) => DateUtils.isSameDay(item.date, DateTime.now()))
+        .toList();
     final earnings = completed.fold<int>(0, (sum, item) => sum + item.fee);
 
     return Scaffold(
@@ -45,7 +48,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         children: [
           _MetricGrid(
-            today: confirmed.length,
+            today: todayConfirmed.length,
             pending: pending.length,
             completed: completed.length,
             earnings: earnings,
@@ -98,7 +101,9 @@ class DoctorDashboardScreen extends ConsumerWidget {
             style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
           ),
           const Gap(10),
-          ...confirmed.map((item) => _ConfirmedCard(appointment: item)),
+          ...todayConfirmed.map((item) => _ConfirmedCard(appointment: item)),
+          if (todayConfirmed.isEmpty)
+            const ListTile(title: Text('No confirmed appointments today')),
         ],
       ),
     );
@@ -181,7 +186,7 @@ class _MetricGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 190,
-        childAspectRatio: 1.45,
+        mainAxisExtent: 150,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -196,11 +201,14 @@ class _MetricGrid extends StatelessWidget {
               children: [
                 Icon(item.$1, color: AppColors.primary),
                 const Spacer(),
-                Text(
-                  item.$3,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    item.$3,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 Text(item.$2),
@@ -296,7 +304,12 @@ class _ConfirmedCard extends ConsumerWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: const Icon(Iconsax.video, color: AppColors.primary),
+        leading: Icon(
+          appointment.consultationType == 'Online Consultation'
+              ? Iconsax.video
+              : Iconsax.hospital,
+          color: AppColors.primary,
+        ),
         title: Text(appointment.patientName),
         subtitle: Text('${appointment.timeSlot} | ${appointment.symptoms}'),
         trailing: PopupMenuButton<String>(
@@ -309,10 +322,11 @@ class _ConfirmedCard extends ConsumerWidget {
               context.push('/doctor/patients/${appointment.id}');
             }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'record', child: Text('Patient Record')),
-            PopupMenuItem(value: 'call', child: Text('Start Call')),
-            PopupMenuItem(value: 'rx', child: Text('Write Prescription')),
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 'record', child: Text('Patient Record')),
+            if (appointment.consultationType == 'Online Consultation')
+              const PopupMenuItem(value: 'call', child: Text('Start Call')),
+            const PopupMenuItem(value: 'rx', child: Text('Write Prescription')),
           ],
         ),
       ),

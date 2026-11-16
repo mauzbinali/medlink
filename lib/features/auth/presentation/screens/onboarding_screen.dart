@@ -105,35 +105,38 @@ class _OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 180,
-          height: 180,
-          decoration: BoxDecoration(
-            color: AppColors.sky,
-            borderRadius: BorderRadius.circular(40),
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 180,
+            height: 180,
+            decoration: BoxDecoration(
+              color: AppColors.sky,
+              borderRadius: BorderRadius.circular(40),
+            ),
+            child: Icon(icon, size: 82, color: AppColors.primary),
+          ).animate().fadeIn().scale(curve: Curves.easeOutBack),
+          const Gap(36),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
-          child: Icon(icon, size: 82, color: AppColors.primary),
-        ).animate().fadeIn().scale(curve: Curves.easeOutBack),
-        const Gap(36),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const Gap(12),
-        Text(
-          body,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge?.copyWith(color: AppColors.muted, height: 1.5),
-        ),
-      ],
+          const Gap(12),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.muted,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

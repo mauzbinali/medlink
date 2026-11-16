@@ -46,6 +46,20 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       );
     }
     final appointment = matches.first;
+    if (appointment.status != AppointmentStatus.confirmed ||
+        appointment.consultationType != 'Online Consultation') {
+      return const Scaffold(
+        appBar: MedLinkAppBar(
+          title: 'Video Consultation',
+          fallbackRoute: AppRoutes.appointments,
+        ),
+        body: MedLinkEmptyState(
+          icon: Iconsax.video_slash,
+          title: 'Call not available',
+          message: 'A confirmed online consultation is required.',
+        ),
+      );
+    }
     final doctor = SampleData.doctors.firstWhere(
       (item) => item.id == appointment.doctorId,
       orElse: () => SampleData.doctors.first,
@@ -87,7 +101,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                       ),
                       const Gap(6),
                       Text(
-                        '00:12:48 | ${appointment.consultationType}',
+                        'Demo | ${appointment.consultationType}',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: .75),
                         ),
@@ -128,8 +142,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
               left: 20,
               right: 20,
               bottom: 26,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Wrap(
+                alignment: WrapAlignment.spaceEvenly,
+                spacing: 6,
+                runSpacing: 8,
                 children: [
                   _CallButton(
                     icon: muted ? Iconsax.microphone_slash : Iconsax.microphone,
@@ -154,12 +170,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                     icon: Iconsax.call_slash,
                     color: AppColors.danger,
                     onTap: () {
-                      ref.read(appControllerProvider.notifier)
-                        ..updateAppointmentStatus(
-                          appointment.id,
-                          AppointmentStatus.completed,
-                        )
-                        ..createPrescription(appointment.id);
                       _leaveCall(context);
                     },
                   ),

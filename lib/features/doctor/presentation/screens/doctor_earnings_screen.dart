@@ -27,6 +27,17 @@ class DoctorEarningsScreen extends ConsumerWidget {
       (payment) => payment.status == PaymentStatus.paid,
     );
     final total = paid.fold<int>(0, (sum, payment) => sum + payment.amount);
+    final now = DateTime.now();
+    final weekStart = DateUtils.dateOnly(
+      now,
+    ).subtract(Duration(days: now.weekday - 1));
+    final week = paid
+        .where(
+          (payment) =>
+              !payment.createdAt.isBefore(weekStart) &&
+              !payment.createdAt.isAfter(now),
+        )
+        .fold<int>(0, (sum, payment) => sum + payment.amount);
     final today = paid
         .where(
           (payment) => DateUtils.isSameDay(payment.createdAt, DateTime.now()),
@@ -47,7 +58,7 @@ class DoctorEarningsScreen extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.45,
+            mainAxisExtent: 150,
             children: [
               _MetricCard(
                 icon: Iconsax.wallet_3,
@@ -57,7 +68,7 @@ class DoctorEarningsScreen extends ConsumerWidget {
               _MetricCard(
                 icon: Iconsax.chart,
                 label: 'This Week',
-                value: 'Rs.$total',
+                value: 'Rs.$week',
               ),
               _MetricCard(
                 icon: Iconsax.calendar_tick,
@@ -172,9 +183,15 @@ class _MetricCard extends StatelessWidget {
           children: [
             Icon(icon, color: AppColors.primary),
             const Spacer(),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
             Text(label),
           ],

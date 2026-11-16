@@ -101,16 +101,30 @@ class PrescriptionsScreen extends ConsumerWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () async {
-                                  final bytes =
-                                      await PrescriptionPdfService.build(
-                                        doctor: doctor,
-                                        prescription: prescription,
+                                  try {
+                                    final bytes =
+                                        await PrescriptionPdfService.build(
+                                          doctor: doctor,
+                                          prescription: prescription,
+                                        );
+                                    await Printing.layoutPdf(
+                                      onLayout: (_) async => bytes,
+                                      name:
+                                          'medlink-prescription-${prescription.id}.pdf',
+                                    );
+                                  } catch (_) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not open prescription PDF.',
+                                          ),
+                                        ),
                                       );
-                                  await Printing.sharePdf(
-                                    bytes: bytes,
-                                    filename:
-                                        'medlink-prescription-${prescription.id}.pdf',
-                                  );
+                                    }
+                                  }
                                 },
                                 icon: const Icon(Iconsax.document_download),
                                 label: const Text('PDF'),
@@ -120,16 +134,30 @@ class PrescriptionsScreen extends ConsumerWidget {
                             Expanded(
                               child: FilledButton.tonalIcon(
                                 onPressed: () async {
-                                  final bytes =
-                                      await PrescriptionPdfService.build(
-                                        doctor: doctor,
-                                        prescription: prescription,
+                                  try {
+                                    final bytes =
+                                        await PrescriptionPdfService.build(
+                                          doctor: doctor,
+                                          prescription: prescription,
+                                        );
+                                    await Printing.sharePdf(
+                                      bytes: bytes,
+                                      filename:
+                                          'medlink-prescription-${prescription.id}.pdf',
+                                    );
+                                  } catch (_) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not share prescription PDF.',
+                                          ),
+                                        ),
                                       );
-                                  await Printing.sharePdf(
-                                    bytes: bytes,
-                                    filename:
-                                        'medlink-prescription-${prescription.id}.pdf',
-                                  );
+                                    }
+                                  }
                                 },
                                 icon: const Icon(Iconsax.share),
                                 label: const Text('Share'),

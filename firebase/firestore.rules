@@ -2,79 +2,159 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function active() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
     }
-
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+    function role(value) {
+      return active() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == value;
     }
-
-    function userRole() {
-      return signedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-        : null;
+    function verified() { return active() && request.auth.token.email_verified == true; }
+    function admin() { return verified() && role('admin'); }
+    function patient() { return verified() && role('patient'); }
+    function doctor() { return verified() && role('doctor'); }
+    function participant(data) {
+      return verified() && (owner(data.patientId) || owner(data.doctorUid));
     }
-
-    function isAdmin() {
-      return userRole() == 'admin';
+    function appointment(id) {
+      return get(/databases/$(database)/documents/appointments/$(id)).data;
     }
-
-    function isDoctor() {
-      return userRole() == 'doctor';
+    function linked(data) {
+      let appt = appointment(data.appointmentId);
+      return data.patientId == appt.patientId &&
+        data.doctorId == appt.doctorId && data.doctorUid == appt.doctorUid;
+    }
+    function stableOwners() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['patientId', 'doctorId', 'doctorUid', 'appointmentId']);
+    }
+    function safePaymentChange() {
+      return request.resource.data.paymentStatus == resource.data.paymentStatus ||
+        (resource.data.paymentStatus in ['Unpaid', 'Pending'] &&
+          request.resource.data.paymentStatus == 'Cancelled' &&
+          request.resource.data.status in ['cancelled', 'rejected']);
+    }
+    function patientTransition() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let rescheduled = after.date != before.date || after.timeSlot != before.timeSlot;
+      return patient() && owner(before.patientId) &&
+        before.status in ['pending', 'confirmed'] &&
+        (rescheduled ? after.status == 'pending' :
+          after.status in [before.status, 'cancelled']);
+    }
+    function doctorTransition() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return doctor() && owner(before.doctorUid) &&
+        after.date == before.date && after.timeSlot == before.timeSlot &&
+        ((before.status == 'pending' && after.status in ['confirmed', 'rejected']) ||
+          (before.status == 'confirmed' && after.status in ['completed', 'cancelled']));
     }
 
     match /users/{uid} {
-      allow read, update: if isOwner(uid) || isAdmin();
-      allow create: if signedIn() && request.auth.uid == uid;
-      allow delete: if isAdmin();
+      allow read: if owner(uid) || admin();
+      allow create: if owner(uid) && request.resource.data.uid == uid &&
+        request.resource.data.role == null && request.resource.data.isActive == true &&
+        request.resource.data.keys().hasOnly(
+          ['uid', 'role', 'name', 'email', 'phone', 'createdAt', 'isActive']);
+      allow update: if admin() || (owner(uid) && active() &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.isActive == resource.data.isActive &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['name', 'email', 'phone', 'fcmTokens', 'updatedAt', 'role']) &&
+        (request.resource.data.role == resource.data.role ||
+          (verified() && resource.data.role == null &&
+            request.resource.data.role in ['patient', 'doctor'])));
+      allow delete: if admin();
     }
 
+    // Catalog account bindings and approvals require trusted administration.
     match /doctors/{doctorId} {
       allow read: if true;
-      allow create, update: if isAdmin() || isDoctor();
-      allow delete: if isAdmin();
+      allow write: if admin();
     }
 
     match /appointments/{appointmentId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if participant(resource.data) || admin();
+      // A transaction must be able to test a new ID before creating it.
+      allow get: if patient() &&
+        !exists(/databases/$(database)/documents/appointments/$(appointmentId));
+      allow create: if patient() && owner(request.resource.data.patientId) &&
+        request.resource.data.appointmentId == appointmentId &&
+        request.resource.data.doctorUid is string &&
+        request.resource.data.doctorUid.size() > 0 &&
+        request.resource.data.doctorUid ==
+          get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.ownerUid &&
+        get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.isApproved == true &&
+        request.resource.data.fee ==
+          get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.fee &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.paymentStatus in ['Pending', 'Unpaid'];
+      allow update: if stableOwners() && (admin() ||
+        (participant(resource.data) && safePaymentChange() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['date', 'timeSlot', 'status', 'paymentStatus']) &&
+          (patientTransition() || doctorTransition())));
+      allow delete: if admin();
     }
 
     match /prescriptions/{prescriptionId} {
-      allow read: if signedIn();
-      allow create, update: if isDoctor() || isAdmin();
-      allow delete: if isAdmin();
+      allow read: if participant(resource.data) || admin();
+      allow create: if linked(request.resource.data) &&
+        (admin() || (doctor() && owner(request.resource.data.doctorUid)));
+      allow update: if stableOwners() && linked(request.resource.data) &&
+        (admin() || (doctor() && owner(resource.data.doctorUid)));
+      allow delete: if admin();
     }
 
     match /medical_records/{recordId} {
-      allow read, create, update: if signedIn();
-      allow delete: if signedIn();
+      allow read, delete: if (verified() && owner(resource.data.patientId)) || admin();
+      allow create: if patient() && owner(request.resource.data.patientId);
+      allow update: if request.resource.data.patientId == resource.data.patientId &&
+        ((patient() && owner(resource.data.patientId)) || admin());
     }
 
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if isAdmin();
+      // Appointment/patient identifiers must not be exposed as public reviews.
+      allow read: if participant(resource.data) || admin();
+      allow create: if patient() && linked(request.resource.data) &&
+        owner(request.resource.data.patientId) &&
+        appointment(request.resource.data.appointmentId).status == 'completed' &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+      allow update, delete: if admin();
     }
 
     match /payments/{paymentId} {
-      allow read: if signedIn();
-      allow create, update: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if participant(resource.data) || admin();
+      allow create: if linked(request.resource.data) && (admin() ||
+        (patient() && owner(request.resource.data.patientId) &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.amount == appointment(request.resource.data.appointmentId).fee));
+      // Money movement must be confirmed by trusted payment processing/admin.
+      allow update: if stableOwners() && (admin() ||
+        (participant(resource.data) && linked(resource.data) &&
+          resource.data.status == 'pending' && request.resource.data.status == 'failed' &&
+          appointment(resource.data.appointmentId).status in ['cancelled', 'rejected'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])));
+      allow delete: if admin();
     }
 
     match /health_tips/{tipId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if admin();
     }
 
     match /notifications/{notificationId} {
-      allow read, update: if signedIn();
-      allow create: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if (verified() && owner(resource.data.userId)) || admin();
+      allow create, delete: if admin();
+      allow update: if admin() || (verified() && owner(resource.data.userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) &&
+        request.resource.data.isRead is bool);
     }
   }
 }

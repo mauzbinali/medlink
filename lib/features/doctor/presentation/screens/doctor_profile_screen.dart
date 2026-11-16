@@ -57,15 +57,6 @@ class DoctorProfileScreen extends StatelessWidget {
           _Field(label: 'Clinic Address', value: doctor.clinicAddress),
           _Field(label: 'About', value: doctor.about, maxLines: 4),
           const Gap(18),
-          FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile changes saved.')),
-              );
-            },
-            icon: const Icon(Iconsax.tick_circle),
-            label: const Text('Save Changes'),
-          ),
         ],
       ),
     );
@@ -84,6 +75,7 @@ class _Field extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
+        readOnly: true,
         initialValue: value,
         maxLines: maxLines,
         decoration: InputDecoration(labelText: label),

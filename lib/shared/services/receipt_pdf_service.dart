@@ -14,65 +14,69 @@ class ReceiptPdfService {
     required Appointment appointment,
     required Doctor doctor,
   }) async {
+    if (doctor.id != appointment.doctorId) {
+      throw ArgumentError('Appointment and doctor IDs must match');
+    }
     final pdf = pw.Document();
     final createdAt = DateFormat('MMM d, yyyy').format(appointment.createdAt);
     final visitDate = DateFormat('MMM d, yyyy').format(appointment.date);
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        footer: (context) => pw.Text(
+          'Portfolio demo document. Not proof of payment.',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+        ),
         build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'MedLink Receipt',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue700,
-                    ),
+          return [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'MedLink Receipt',
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue700,
                   ),
-                  pw.Text(createdAt),
-                ],
-              ),
-              pw.SizedBox(height: 24),
-              _line('Receipt ID', appointment.id),
-              _line('Patient', appointment.patientName),
-              _line('Doctor', doctor.name),
-              _line('Specialty', doctor.specialty),
-              _line('Consultation Type', appointment.consultationType),
-              _line('Date & Time', '$visitDate, ${appointment.timeSlot}'),
-              _line('Payment Method', appointment.paymentMethod),
-              _line('Payment Status', appointment.paymentStatus),
-              pw.Divider(height: 32),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Total',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(createdAt),
+              ],
+            ),
+            pw.SizedBox(height: 24),
+            _line('Receipt ID', appointment.id),
+            _line('Patient', appointment.patientName),
+            _line('Doctor', doctor.name),
+            _line('Specialty', doctor.specialty),
+            _line('Consultation Type', appointment.consultationType),
+            _line('Date & Time', '$visitDate, ${appointment.timeSlot}'),
+            _line('Payment Method', appointment.paymentMethod),
+            _line('Payment Status', appointment.paymentStatus),
+            pw.Divider(height: 32),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Total',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  'Rs.${appointment.fee}',
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
                   ),
-                  pw.Text(
-                    'Rs.${appointment.fee}',
-                    style: pw.TextStyle(
-                      fontSize: 20,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              pw.Spacer(),
-              pw.Text(
-                'Thank you for using MedLink.',
-                style: const pw.TextStyle(color: PdfColors.grey700),
-              ),
-            ],
-          );
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 24),
+            pw.Text(
+              'Thank you for using MedLink.',
+              style: const pw.TextStyle(color: PdfColors.grey700),
+            ),
+          ];
         },
       ),
     );

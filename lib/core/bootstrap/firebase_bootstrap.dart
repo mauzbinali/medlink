@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 class FirebaseBootstrap {
   static Future<void> initialize() async {
+    if (Firebase.apps.isNotEmpty) return;
     try {
       await Firebase.initializeApp();
     } on FirebaseException catch (error) {

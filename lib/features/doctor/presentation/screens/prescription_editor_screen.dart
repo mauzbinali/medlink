@@ -143,14 +143,16 @@ class _PrescriptionEditorScreenState
           const Gap(20),
           FilledButton.icon(
             onPressed: () {
-              final days = int.tryParse(followUpController.text) ?? 7;
+              final days = int.tryParse(followUpController.text);
               if (diagnosisController.text.trim().isEmpty ||
                   medicineController.text.trim().isEmpty ||
                   dosageController.text.trim().isEmpty ||
                   frequencyController.text.trim().isEmpty ||
                   durationController.text.trim().isEmpty ||
                   instructionsController.text.trim().isEmpty ||
-                  days <= 0) {
+                  days == null ||
+                  days <= 0 ||
+                  days > 3650) {
                 setState(
                   () => formError =
                       'Complete diagnosis, medicine, dosage, instructions, and follow-up.',
@@ -169,7 +171,7 @@ class _PrescriptionEditorScreenState
                         dosage: dosageController.text.trim(),
                         frequency: frequencyController.text.trim(),
                         duration: durationController.text.trim(),
-                        instructions: 'After meal',
+                        instructions: instructionsController.text.trim(),
                       ),
                     ],
                     instructions: instructionsController.text.trim(),

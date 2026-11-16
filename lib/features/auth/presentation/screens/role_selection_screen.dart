@@ -13,6 +13,7 @@ class RoleSelectionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
     return Scaffold(
       appBar: const MedLinkAppBar(
         title: 'Choose workspace',
@@ -21,39 +22,81 @@ class RoleSelectionScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          if (auth.error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                auth.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           _RoleTile(
             icon: Iconsax.user,
             title: 'Patient',
             subtitle: 'Book doctors, view prescriptions, manage records.',
-            onTap: () {
-              ref
-                  .read(authControllerProvider.notifier)
-                  .selectRole(UserRole.patient);
-              context.go(AppRoutes.patientHome);
-            },
+            onTap: auth.isLoading
+                ? null
+                : () async {
+                    await ref
+                        .read(authControllerProvider.notifier)
+                        .selectRole(UserRole.patient);
+                    if (context.mounted &&
+                        ref.read(authControllerProvider).error == null &&
+                        ref.read(authControllerProvider).role ==
+                            UserRole.patient) {
+                      context.go(
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .landingRoute(),
+                      );
+                    }
+                  },
           ).animate().fadeIn().slideY(begin: .05, end: 0),
           _RoleTile(
             icon: Iconsax.medal_star,
             title: 'Doctor',
             subtitle: 'Manage requests, availability, and prescriptions.',
-            onTap: () {
-              ref
-                  .read(authControllerProvider.notifier)
-                  .selectRole(UserRole.doctor);
-              context.go(AppRoutes.doctorDashboard);
-            },
+            onTap: auth.isLoading
+                ? null
+                : () async {
+                    await ref
+                        .read(authControllerProvider.notifier)
+                        .selectRole(UserRole.doctor);
+                    if (context.mounted &&
+                        ref.read(authControllerProvider).error == null &&
+                        ref.read(authControllerProvider).role ==
+                            UserRole.doctor) {
+                      context.go(
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .landingRoute(),
+                      );
+                    }
+                  },
           ).animate(delay: 60.ms).fadeIn().slideY(begin: .05, end: 0),
-          _RoleTile(
-            icon: Iconsax.shield_tick,
-            title: 'Admin',
-            subtitle: 'Approve doctors, monitor appointments and revenue.',
-            onTap: () {
-              ref
-                  .read(authControllerProvider.notifier)
-                  .selectRole(UserRole.admin);
-              context.go(AppRoutes.adminDashboard);
-            },
-          ).animate(delay: 120.ms).fadeIn().slideY(begin: .05, end: 0),
+          if (!ref.watch(firebaseEnabledProvider))
+            _RoleTile(
+              icon: Iconsax.shield_tick,
+              title: 'Admin',
+              subtitle: 'Approve doctors, monitor appointments and revenue.',
+              onTap: auth.isLoading
+                  ? null
+                  : () async {
+                      await ref
+                          .read(authControllerProvider.notifier)
+                          .selectRole(UserRole.admin);
+                      if (context.mounted &&
+                          ref.read(authControllerProvider).error == null &&
+                          ref.read(authControllerProvider).role ==
+                              UserRole.admin) {
+                        context.go(
+                          ref
+                              .read(authControllerProvider.notifier)
+                              .landingRoute(),
+                        );
+                      }
+                    },
+            ).animate(delay: 120.ms).fadeIn().slideY(begin: .05, end: 0),
         ],
       ),
     );
@@ -71,7 +114,7 @@ class _RoleTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

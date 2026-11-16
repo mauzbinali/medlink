@@ -181,14 +181,26 @@ class AppointmentDetailScreen extends ConsumerWidget {
           const Gap(18),
           OutlinedButton.icon(
             onPressed: () async {
-              final bytes = await ReceiptPdfService.build(
-                appointment: appointment,
-                doctor: doctor,
-              );
-              await Printing.sharePdf(
-                bytes: bytes,
-                filename: 'medlink-receipt-${appointment.id}.pdf',
-              );
+              try {
+                final bytes = await ReceiptPdfService.build(
+                  appointment: appointment,
+                  doctor: doctor,
+                );
+                await Printing.sharePdf(
+                  bytes: bytes,
+                  filename: 'medlink-receipt-${appointment.id}.pdf',
+                );
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not export receipt. Please try again.',
+                      ),
+                    ),
+                  );
+                }
+              }
             },
             icon: const Icon(Iconsax.receipt),
             label: const Text('Download Receipt'),
@@ -201,7 +213,8 @@ class AppointmentDetailScreen extends ConsumerWidget {
             label: const Text('Chat With Clinic'),
           ),
           const Gap(10),
-          if (appointment.status == AppointmentStatus.confirmed)
+          if (appointment.status == AppointmentStatus.confirmed &&
+              appointment.consultationType == 'Online Consultation')
             FilledButton.icon(
               onPressed: () => context.push('/video-call/${appointment.id}'),
               icon: const Icon(Iconsax.video),
@@ -237,23 +250,31 @@ class AppointmentDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     Appointment appointment,
   ) {
-    var selectedDate = appointment.date.add(const Duration(days: 1));
+    final today = DateUtils.dateOnly(DateTime.now());
+    final lastDate = today.add(const Duration(days: 60));
+    var selectedDate = DateUtils.dateOnly(appointment.date);
+    if (selectedDate.isBefore(today)) selectedDate = today;
+    if (selectedDate.isAfter(lastDate)) selectedDate = lastDate;
     var selectedSlot = appointment.timeSlot;
-    final slots = const [
+    final slots = <String>{
+      appointment.timeSlot,
       '10:00 AM',
       '11:30 AM',
       '5:00 PM',
       '6:30 PM',
       '7:00 PM',
-    ];
+    }.toList();
+    String? errorMessage;
 
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return Padding(
+            return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -266,8 +287,8 @@ class AppointmentDetailScreen extends ConsumerWidget {
                   const Gap(14),
                   CalendarDatePicker(
                     initialDate: selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 60)),
+                    firstDate: today,
+                    lastDate: lastDate,
                     onDateChanged: (date) =>
                         setState(() => selectedDate = date),
                   ),
@@ -284,18 +305,29 @@ class AppointmentDetailScreen extends ConsumerWidget {
                     }).toList(),
                   ),
                   const Gap(18),
+                  if (errorMessage != null)
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: () {
-                        ref
-                            .read(appControllerProvider.notifier)
-                            .rescheduleAppointment(
-                              id: appointment.id,
-                              date: selectedDate,
-                              timeSlot: selectedSlot,
-                            );
-                        Navigator.pop(context);
+                        try {
+                          ref
+                              .read(appControllerProvider.notifier)
+                              .rescheduleAppointment(
+                                id: appointment.id,
+                                date: selectedDate,
+                                timeSlot: selectedSlot,
+                              );
+                          Navigator.pop(context);
+                        } on StateError catch (error) {
+                          setState(() => errorMessage = error.message);
+                        } on ArgumentError catch (error) {
+                          setState(() => errorMessage = '${error.message}');
+                        }
                       },
                       child: const Text('Save New Slot'),
                     ),

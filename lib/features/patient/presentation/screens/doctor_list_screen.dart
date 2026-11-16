@@ -23,6 +23,7 @@ class DoctorListScreen extends StatefulWidget {
 class _DoctorListScreenState extends State<DoctorListScreen> {
   final searchController = TextEditingController();
   String selectedFilter = 'All';
+  bool initializedFilter = false;
 
   @override
   void dispose() {
@@ -32,6 +33,12 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!initializedFilter) {
+      initializedFilter = true;
+      final parameters = GoRouterState.of(context).uri.queryParameters;
+      searchController.text = parameters['specialty'] ?? '';
+      if (parameters['filter'] == 'online') selectedFilter = 'Online';
+    }
     final doctors = _filteredDoctors();
 
     return Scaffold(

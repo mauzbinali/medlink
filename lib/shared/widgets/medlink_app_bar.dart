@@ -24,6 +24,7 @@ class MedLinkAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      automaticallyImplyLeading: showBackButton,
       leading: showBackButton
           ? MedLinkBackButton(fallbackRoute: fallbackRoute)
           : null,

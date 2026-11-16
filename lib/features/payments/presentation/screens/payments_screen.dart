@@ -50,106 +50,113 @@ class PaymentsScreen extends ConsumerWidget {
                     ? null
                     : appointmentMatches.first;
                 return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.mint,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Iconsax.wallet_3,
-                                    color: AppColors.teal,
-                                  ),
-                                ),
-                                const Gap(12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        doctor.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                      ),
-                                      Text(
-                                        DateFormat(
-                                          'MMM d, yyyy - h:mm a',
-                                        ).format(payment.createdAt),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                _StatusChip(status: payment.status),
-                              ],
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.mint,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Iconsax.wallet_3,
+                                color: AppColors.teal,
+                              ),
                             ),
-                            const Divider(height: 26),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Method'),
-                                Text(
-                                  payment.method,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
+                            const Gap(12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    doctor.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w900),
                                   ),
-                                ),
-                              ],
+                                  Text(
+                                    DateFormat(
+                                      'MMM d, yyyy - h:mm a',
+                                    ).format(payment.createdAt),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const Gap(8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Amount'),
-                                Text(
-                                  'Rs.${payment.amount}',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                ),
-                              ],
-                            ),
-                            const Gap(14),
-                            OutlinedButton.icon(
-                              onPressed: appointment == null
-                                  ? null
-                                  : () async {
-                                      final bytes =
-                                          await ReceiptPdfService.build(
-                                            appointment: appointment,
-                                            doctor: doctor,
-                                          );
-                                      await Printing.sharePdf(
-                                        bytes: bytes,
-                                        filename:
-                                            'medlink-receipt-${payment.id}.pdf',
-                                      );
-                                    },
-                              icon: const Icon(Iconsax.receipt),
-                              label: const Text('Share Receipt'),
+                            _StatusChip(status: payment.status),
+                          ],
+                        ),
+                        const Divider(height: 26),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Method'),
+                            Text(
+                              payment.method,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    )
-                    .animate(delay: (40 * index).ms)
-                    .fadeIn()
-                    .slideY(begin: .05, end: 0);
+                        const Gap(8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Amount'),
+                            Text(
+                              'Rs.${payment.amount}',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const Gap(14),
+                        OutlinedButton.icon(
+                          onPressed: appointment == null
+                              ? null
+                              : () async {
+                                  try {
+                                    final bytes = await ReceiptPdfService.build(
+                                      appointment: appointment,
+                                      doctor: doctor,
+                                    );
+                                    await Printing.sharePdf(
+                                      bytes: bytes,
+                                      filename:
+                                          'medlink-receipt-${payment.id}.pdf',
+                                    );
+                                  } catch (_) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not export receipt. Please try again.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          icon: const Icon(Iconsax.receipt),
+                          label: const Text('Share Receipt'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate(delay: (40 * index).ms).fadeIn().slideY(begin: .05, end: 0);
               },
             ),
     );

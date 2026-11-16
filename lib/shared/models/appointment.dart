@@ -41,6 +41,7 @@ class Appointment {
 
   Appointment copyWith({
     AppointmentStatus? status,
+    String? paymentStatus,
     DateTime? date,
     String? timeSlot,
   }) {
@@ -59,7 +60,7 @@ class Appointment {
       reportNames: reportNames,
       fee: fee,
       paymentMethod: paymentMethod,
-      paymentStatus: paymentStatus,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
       status: status ?? this.status,
       createdAt: createdAt,
     );

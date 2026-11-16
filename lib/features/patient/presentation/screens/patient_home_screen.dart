@@ -105,7 +105,12 @@ class PatientHomeScreen extends ConsumerWidget {
                         width: tileWidth,
                         icon: specialty.icon,
                         name: specialty.name,
-                        onTap: () => context.push(AppRoutes.doctors),
+                        onTap: () => context.push(
+                          Uri(
+                            path: AppRoutes.doctors,
+                            queryParameters: {'specialty': specialty.name},
+                          ).toString(),
+                        ),
                       );
                     },
                   );
@@ -289,7 +294,7 @@ class _HeroPanel extends StatelessWidget {
           const Gap(12),
           Container(
             width: 86,
-            height: 112,
+            constraints: const BoxConstraints(minHeight: 112),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: .16),
@@ -297,6 +302,7 @@ class _HeroPanel extends StatelessWidget {
               border: Border.all(color: Colors.white.withValues(alpha: .22)),
             ),
             child: const Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Iconsax.health, size: 36, color: Colors.white),
@@ -344,12 +350,16 @@ class _HeroMetric extends StatelessWidget {
         children: [
           Icon(icon, color: Colors.white, size: 17),
           const Gap(6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
             ),
           ),
         ],
@@ -370,7 +380,7 @@ class _QuickActions extends StatelessWidget {
         : Colors.transparent;
     final actions = [
       (Iconsax.calendar_add, 'Book', AppRoutes.doctors),
-      (Iconsax.video, 'Online', AppRoutes.doctors),
+      (Iconsax.video, 'Online', '${AppRoutes.doctors}?filter=online'),
       (Iconsax.calendar_tick, 'Visits', AppRoutes.appointments),
       (Iconsax.document_upload, 'Records', AppRoutes.medicalRecords),
       (Iconsax.call_calling, 'Emergency', AppRoutes.emergency),

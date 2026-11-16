@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -35,10 +36,62 @@ import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/prescriptions/presentation/screens/prescriptions_screen.dart';
 import '../../features/telemedicine/presentation/screens/video_call_screen.dart';
 import 'app_routes.dart';
+import '../../features/auth/application/auth_controller.dart';
+
+String? authRedirect(AuthState auth, String path) {
+  if (path == AppRoutes.splash) return null;
+  const publicPaths = {
+    AppRoutes.onboarding,
+    AppRoutes.login,
+    AppRoutes.register,
+    AppRoutes.forgotPassword,
+  };
+  if (!auth.isAuthenticated) {
+    return publicPaths.contains(path) ? null : AppRoutes.login;
+  }
+  if (!auth.isEmailVerified) {
+    return path == AppRoutes.emailVerification
+        ? null
+        : AppRoutes.emailVerification;
+  }
+  if (auth.role == null) {
+    return path == AppRoutes.roleSelection ? null : AppRoutes.roleSelection;
+  }
+  final home = switch (auth.role!) {
+    UserRole.patient => AppRoutes.patientHome,
+    UserRole.doctor => AppRoutes.doctorDashboard,
+    UserRole.admin => AppRoutes.adminDashboard,
+  };
+  if (publicPaths.contains(path) ||
+      path == AppRoutes.roleSelection ||
+      path == AppRoutes.emailVerification) {
+    return home;
+  }
+  bool within(String root) => path == root || path.startsWith('$root/');
+  if (within('/admin') && auth.role != UserRole.admin ||
+      within('/doctor') && auth.role != UserRole.doctor ||
+      within('/patient') && auth.role != UserRole.patient) {
+    return home;
+  }
+  if ((within('/appointments') || within('/video-call')) &&
+      auth.role == UserRole.admin) {
+    return home;
+  }
+  return null;
+}
+
+class _AuthRouterRefresh extends ChangeNotifier {
+  void refresh() => notifyListeners();
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final refresh = _AuthRouterRefresh();
+  ref.listen(authControllerProvider, (_, next) => refresh.refresh());
+  final router = GoRouter(
     initialLocation: AppRoutes.splash,
+    refreshListenable: refresh,
+    redirect: (context, state) =>
+        authRedirect(ref.read(authControllerProvider), state.uri.path),
     routes: [
       GoRoute(
         path: AppRoutes.splash,
@@ -224,4 +277,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.onDispose(router.dispose);
+  ref.onDispose(refresh.dispose);
+  return router;
 });

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -5,11 +6,22 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _notifications;
 
+  bool get isSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   Future<void> initialize() async {
+    if (!isSupported) return;
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
     const settings = InitializationSettings(android: android, iOS: ios);
     await _notifications.initialize(settings: settings);
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> showLocal({
@@ -17,6 +29,7 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
+    if (!isSupported) return;
     const android = AndroidNotificationDetails(
       'appointments',
       'Appointments',

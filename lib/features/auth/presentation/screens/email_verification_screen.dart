@@ -21,7 +21,7 @@ class EmailVerificationScreen extends ConsumerWidget {
         title: 'Verify Email',
         fallbackRoute: AppRoutes.login,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -65,11 +65,15 @@ class EmailVerificationScreen extends ConsumerWidget {
                       .read(authControllerProvider.notifier)
                       .landingRoute();
                   if (context.mounted) {
-                    context.go(
-                      route == AppRoutes.emailVerification
-                          ? AppRoutes.roleSelection
-                          : route,
-                    );
+                    if (route == AppRoutes.emailVerification) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Your email is not verified yet.'),
+                        ),
+                      );
+                    } else {
+                      context.go(route);
+                    }
                   }
                 },
                 icon: const Icon(Iconsax.tick_circle),
@@ -79,13 +83,25 @@ class EmailVerificationScreen extends ConsumerWidget {
             const Gap(10),
             TextButton(
               onPressed: () async {
-                await ref
-                    .read(authControllerProvider.notifier)
-                    .resendVerificationEmail();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Verification email sent')),
-                  );
+                try {
+                  await ref
+                      .read(authControllerProvider.notifier)
+                      .resendVerificationEmail();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Verification email sent')),
+                    );
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Could not resend email. Please try again.',
+                        ),
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Resend email'),

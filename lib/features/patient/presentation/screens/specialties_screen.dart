@@ -24,7 +24,7 @@ class SpecialtiesScreen extends StatelessWidget {
           maxCrossAxisExtent: 210,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.05,
+          mainAxisExtent: 220,
         ),
         itemCount: SampleData.specialties.length,
         itemBuilder: (context, index) {
@@ -32,7 +32,12 @@ class SpecialtiesScreen extends StatelessWidget {
           return Card(
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => context.push(AppRoutes.doctors),
+              onTap: () => context.push(
+                Uri(
+                  path: AppRoutes.doctors,
+                  queryParameters: {'specialty': specialty.name},
+                ).toString(),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

@@ -116,8 +116,10 @@ class DoctorDetailScreen extends ConsumerWidget {
                               size: 18,
                             ),
                             const Gap(6),
-                            Text(
-                              '${doctor.rating} (${doctor.reviewsCount} reviews)',
+                            Expanded(
+                              child: Text(
+                                '${doctor.rating} (${doctor.reviewsCount} reviews)',
+                              ),
                             ),
                           ],
                         ),
@@ -201,29 +203,34 @@ class DoctorDetailScreen extends ConsumerWidget {
           const Gap(100),
         ],
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    context.push('/patient/doctors/$doctorId/book'),
-                icon: const Icon(Iconsax.video),
-                label: const Text('Online'),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: doctor.isOnlineAvailable
+                      ? () => context.push(
+                          '/patient/doctors/$doctorId/book?type=online',
+                        )
+                      : null,
+                  icon: const Icon(Iconsax.video),
+                  label: const Text('Online'),
+                ),
               ),
-            ),
-            const Gap(12),
-            Expanded(
-              flex: 2,
-              child: FilledButton.icon(
-                onPressed: () =>
-                    context.push('/patient/doctors/$doctorId/book'),
-                icon: const Icon(Iconsax.calendar_add),
-                label: const Text('Book Appointment'),
+              const Gap(12),
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: () =>
+                      context.push('/patient/doctors/$doctorId/book'),
+                  icon: const Icon(Iconsax.calendar_add),
+                  label: const Text('Book Appointment'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/sample_data.dart';
@@ -175,6 +176,10 @@ class AppController extends Notifier<AppState> {
   }
 
   void bookAppointment(Appointment appointment) {
+    if (state.appointments.any((item) => item.id == appointment.id)) {
+      throw StateError('This appointment has already been booked.');
+    }
+    _validateSlot(appointment.doctorId, appointment.date, appointment.timeSlot);
     final payment = Payment(
       id: _uuid.v4(),
       appointmentId: appointment.id,
@@ -187,10 +192,12 @@ class AppController extends Notifier<AppState> {
           : PaymentStatus.pending,
       createdAt: DateTime.now(),
     );
+    final firestore = ref.read(firestoreServiceProvider);
     _safePersist(
-      ref.read(firestoreServiceProvider).saveAppointment(appointment),
+      firestore
+          .saveAppointment(appointment)
+          .then((_) => firestore.savePayment(payment)),
     );
-    _safePersist(ref.read(firestoreServiceProvider).savePayment(payment));
     state = state.copyWith(
       appointments: [appointment, ...state.appointments],
       payments: [payment, ...state.payments],
@@ -252,7 +259,7 @@ class AppController extends Notifier<AppState> {
       reportNames: reportNames,
       fee: fee,
       paymentMethod: paymentMethod,
-      paymentStatus: paymentMethod == 'Cash at Clinic' ? 'Unpaid' : 'Paid',
+      paymentStatus: paymentMethod == 'Cash at Clinic' ? 'Unpaid' : 'Pending',
       status: AppointmentStatus.pending,
       createdAt: DateTime.now(),
     );
@@ -262,34 +269,65 @@ class AppController extends Notifier<AppState> {
     if (!state.appointments.any((appointment) => appointment.id == id)) {
       return;
     }
+    final current = state.appointments.firstWhere((item) => item.id == id);
+    if (current.status == status) return;
+    final allowed = switch (current.status) {
+      AppointmentStatus.pending => {
+        AppointmentStatus.confirmed,
+        AppointmentStatus.rejected,
+        AppointmentStatus.cancelled,
+      },
+      AppointmentStatus.confirmed => {
+        AppointmentStatus.completed,
+        AppointmentStatus.cancelled,
+      },
+      _ => <AppointmentStatus>{},
+    };
+    if (!allowed.contains(status)) return;
     final updated = [
       for (final appointment in state.appointments)
         if (appointment.id == id)
-          appointment.copyWith(status: status)
+          appointment.copyWith(
+            status: status,
+            paymentStatus:
+                (status == AppointmentStatus.cancelled ||
+                    status == AppointmentStatus.rejected)
+                ? (appointment.paymentStatus == 'Paid'
+                      ? 'Refunded'
+                      : 'Cancelled')
+                : appointment.paymentStatus,
+          )
         else
           appointment,
     ];
     final changed = updated.firstWhere((appointment) => appointment.id == id);
-    _safePersist(ref.read(firestoreServiceProvider).saveAppointment(changed));
+    final firestore = ref.read(firestoreServiceProvider);
     final shouldRefund =
         status == AppointmentStatus.cancelled ||
         status == AppointmentStatus.rejected;
     final updatedPayments = shouldRefund
         ? [
             for (final payment in state.payments)
-              if (payment.appointmentId == id)
+              if (payment.appointmentId == id &&
+                  payment.status == PaymentStatus.paid)
                 payment.copyWith(status: PaymentStatus.refunded)
+              else if (payment.appointmentId == id &&
+                  payment.status == PaymentStatus.pending)
+                payment.copyWith(status: PaymentStatus.failed)
               else
                 payment,
           ]
         : state.payments;
-    if (shouldRefund) {
-      for (final payment in updatedPayments.where(
-        (payment) => payment.appointmentId == id,
-      )) {
-        _safePersist(ref.read(firestoreServiceProvider).savePayment(payment));
-      }
-    }
+    _safePersist(
+      firestore.saveAppointment(changed).then((_) async {
+        if (!shouldRefund) return;
+        for (final payment in updatedPayments.where(
+          (payment) => payment.appointmentId == id,
+        )) {
+          await firestore.savePayment(payment);
+        }
+      }),
+    );
     state = state.copyWith(
       appointments: updated,
       payments: updatedPayments,
@@ -312,10 +350,20 @@ class AppController extends Notifier<AppState> {
     if (!state.appointments.any((appointment) => appointment.id == id)) {
       return;
     }
+    final current = state.appointments.firstWhere((item) => item.id == id);
+    if (current.status != AppointmentStatus.pending &&
+        current.status != AppointmentStatus.confirmed) {
+      throw StateError('Only active appointments can be rescheduled.');
+    }
+    _validateSlot(current.doctorId, date, timeSlot, excludingId: id);
     final updated = [
       for (final appointment in state.appointments)
         if (appointment.id == id)
-          appointment.copyWith(date: date, timeSlot: timeSlot)
+          appointment.copyWith(
+            date: date,
+            timeSlot: timeSlot,
+            status: AppointmentStatus.pending,
+          )
         else
           appointment,
     ];
@@ -348,12 +396,22 @@ class AppController extends Notifier<AppState> {
     required double rating,
     required String comment,
   }) {
+    final eligible = state.appointments.any(
+      (item) =>
+          item.id == appointmentId &&
+          item.doctorId == doctorId &&
+          item.status == AppointmentStatus.completed,
+    );
+    if (!eligible || !rating.isFinite || rating < 1 || rating > 5) return;
+    if (state.reviews.any((item) => item.appointmentId == appointmentId)) {
+      return;
+    }
     final review = Review(
       id: _uuid.v4(),
       doctorId: doctorId,
       appointmentId: appointmentId,
       rating: rating,
-      comment: comment,
+      comment: comment.trim(),
       createdAt: DateTime.now(),
     );
     _safePersist(ref.read(firestoreServiceProvider).saveReview(review));
@@ -379,6 +437,8 @@ class AppController extends Notifier<AppState> {
   }
 
   void deleteMedicalRecord(String id) {
+    if (!state.medicalRecords.any((record) => record.id == id)) return;
+    _safePersist(ref.read(firestoreServiceProvider).deleteMedicalRecord(id));
     state = state.copyWith(
       medicalRecords: [
         for (final record in state.medicalRecords)
@@ -495,7 +555,10 @@ class AppController extends Notifier<AppState> {
     required String message,
   }) {
     final trimmed = message.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty ||
+        !state.appointments.any((item) => item.id == appointmentId)) {
+      return;
+    }
     state = state.copyWith(
       chatMessages: [
         ChatMessage(
@@ -533,6 +596,50 @@ class AppController extends Notifier<AppState> {
     );
   }
 
+  void _validateSlot(
+    String doctorId,
+    DateTime date,
+    String timeSlot, {
+    String? excludingId,
+  }) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    if (day.isBefore(today) || timeSlot.trim().isEmpty) {
+      throw ArgumentError('Choose a current or future date and a time slot.');
+    }
+    DateTime time;
+    try {
+      time = DateFormat('h:mm a', 'en_US').parseStrict(timeSlot);
+    } on FormatException {
+      throw ArgumentError('Choose a valid appointment time.');
+    }
+    final startsAt = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      time.hour,
+      time.minute,
+    );
+    if (!startsAt.isAfter(now)) {
+      throw ArgumentError('This time has already passed. Choose a later slot.');
+    }
+    final conflict = state.appointments.any(
+      (item) =>
+          item.id != excludingId &&
+          item.doctorId == doctorId &&
+          item.date.year == day.year &&
+          item.date.month == day.month &&
+          item.date.day == day.day &&
+          item.timeSlot == timeSlot &&
+          (item.status == AppointmentStatus.pending ||
+              item.status == AppointmentStatus.confirmed),
+    );
+    if (conflict) {
+      throw StateError('This slot is already booked. Choose another time.');
+    }
+  }
+
   AppNotification _notification({
     required String title,
     required String body,
@@ -549,6 +656,21 @@ class AppController extends Notifier<AppState> {
   }
 
   void _safePersist(Future<void> operation) {
-    unawaited(operation.catchError((_) {}));
+    unawaited(
+      operation.catchError((Object error) {
+        if (!ref.mounted) return;
+        state = state.copyWith(
+          notifications: [
+            _notification(
+              title: 'Changes could not be synced',
+              body:
+                  'This change is only available in this session. Check your connection and try again.',
+              type: 'sync_error',
+            ),
+            ...state.notifications,
+          ],
+        );
+      }),
+    );
   }
 }

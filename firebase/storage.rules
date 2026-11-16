@@ -10,6 +10,12 @@ service firebase.storage {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isAdmin() {
+      return signedIn() && request.auth.token.email_verified == true &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+
     match /medical_records/{uid}/{fileName} {
       allow read, write: if isOwner(uid);
     }
@@ -21,7 +27,7 @@ service firebase.storage {
 
     match /health_tips/{fileName} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
   }
 }

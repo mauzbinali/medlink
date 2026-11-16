@@ -49,7 +49,23 @@ class EmergencyHelpScreen extends StatelessWidget {
                 ),
                 const Gap(12),
                 FilledButton.tonalIcon(
-                  onPressed: () => launchUrl(Uri.parse('tel:1122')),
+                  onPressed: () async {
+                    var launched = false;
+                    try {
+                      launched = await launchUrl(Uri.parse('tel:1122'));
+                    } catch (_) {
+                      launched = false;
+                    }
+                    if (!launched && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Could not open the phone app. Dial 1122 directly.',
+                          ),
+                        ),
+                      );
+                    }
+                  },
                   icon: const Icon(Iconsax.call),
                   label: const Text('Call Ambulance'),
                 ),

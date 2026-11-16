@@ -129,40 +129,42 @@ class _AppointmentCard extends ConsumerWidget {
             _Meta(icon: Iconsax.video, text: appointment.consultationType),
             _Meta(icon: Iconsax.wallet_3, text: 'Rs.${appointment.fee}'),
             const Gap(14),
-            Row(
+            OverflowBar(
+              spacing: 10,
+              overflowSpacing: 8,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        context.push('/patient/appointments/${appointment.id}'),
-                    child: const Text('Details'),
-                  ),
+                OutlinedButton(
+                  onPressed: () =>
+                      context.push('/patient/appointments/${appointment.id}'),
+                  child: const Text('Details'),
                 ),
-                const Gap(10),
                 if (appointment.status == AppointmentStatus.pending ||
                     appointment.status == AppointmentStatus.confirmed)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _confirmCancel(context, ref),
-                      child: const Text('Cancel'),
-                    ),
+                  OutlinedButton(
+                    onPressed: () => _confirmCancel(context, ref),
+                    child: const Text('Cancel'),
                   ),
-                if (appointment.status == AppointmentStatus.confirmed) ...[
-                  const Gap(10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () =>
-                          context.push('/video-call/${appointment.id}'),
-                      child: const Text('Join Call'),
-                    ),
+                if (appointment.status == AppointmentStatus.confirmed &&
+                    appointment.consultationType == 'Online Consultation') ...[
+                  FilledButton(
+                    onPressed: () =>
+                        context.push('/video-call/${appointment.id}'),
+                    child: const Text('Join Call'),
                   ),
                 ],
                 if (appointment.status == AppointmentStatus.completed)
-                  Expanded(
-                    child: FilledButton.tonal(
-                      onPressed: () => _showReviewSheet(context, ref),
-                      child: const Text('Rate Doctor'),
-                    ),
+                  FilledButton.tonal(
+                    onPressed:
+                        ref
+                            .watch(appControllerProvider)
+                            .reviews
+                            .any(
+                              (review) =>
+                                  review.appointmentId == appointment.id,
+                            )
+                        ? null
+                        : () => _showReviewSheet(context, ref),
+                    child: const Text('Rate Doctor'),
                   ),
               ],
             ),
@@ -224,17 +226,19 @@ class _AppointmentCard extends ConsumerWidget {
     );
   }
 
-  void _showReviewSheet(BuildContext context, WidgetRef ref) {
+  Future<void> _showReviewSheet(BuildContext context, WidgetRef ref) async {
     double rating = 5;
     final commentController = TextEditingController(
       text: 'Great consultation.',
     );
 
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) {
-        return Padding(
+        return SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             20,
             8,
@@ -271,15 +275,25 @@ class _AppointmentCard extends ConsumerWidget {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: () {
-                    ref
-                        .read(appControllerProvider.notifier)
-                        .addReview(
-                          doctorId: appointment.doctorId,
-                          appointmentId: appointment.id,
-                          rating: rating,
-                          comment: commentController.text.trim(),
-                        );
-                    Navigator.pop(context);
+                    try {
+                      ref
+                          .read(appControllerProvider.notifier)
+                          .addReview(
+                            doctorId: appointment.doctorId,
+                            appointmentId: appointment.id,
+                            rating: rating,
+                            comment: commentController.text.trim(),
+                          );
+                      Navigator.pop(context);
+                    } on StateError catch (error) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(error.message)));
+                    } on ArgumentError catch (error) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('${error.message}')),
+                      );
+                    }
                   },
                   child: const Text('Submit Review'),
                 ),
@@ -306,7 +320,7 @@ class _Meta extends StatelessWidget {
         children: [
           Icon(icon, size: 17, color: AppColors.primary),
           const Gap(8),
-          Text(text),
+          Expanded(child: Text(text)),
         ],
       ),
     );

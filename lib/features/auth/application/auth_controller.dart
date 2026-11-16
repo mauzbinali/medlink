@@ -5,8 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../shared/state/app_state.dart';
 
 enum UserRole { patient, doctor, admin }
+
+const _unchangedRole = Object();
+
+final firebaseEnabledProvider = Provider<bool>(
+  (ref) => Firebase.apps.isNotEmpty,
+);
+final firebaseAuthProvider = Provider<FirebaseAuth>(
+  (ref) => FirebaseAuth.instance,
+);
+final authFirestoreProvider = Provider<FirebaseFirestore>(
+  (ref) => FirebaseFirestore.instance,
+);
 
 extension UserRoleLabel on UserRole {
   String get label {
@@ -42,7 +55,7 @@ class AuthState {
   AuthState copyWith({
     bool? isLoading,
     bool? isAuthenticated,
-    UserRole? role,
+    Object? role = _unchangedRole,
     String? name,
     String? email,
     bool? isEmailVerified,
@@ -51,7 +64,7 @@ class AuthState {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-      role: role ?? this.role,
+      role: identical(role, _unchangedRole) ? this.role : role as UserRole?,
       name: name ?? this.name,
       email: email ?? this.email,
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,
@@ -65,12 +78,47 @@ final authControllerProvider = NotifierProvider<AuthController, AuthState>(
 );
 
 class AuthController extends Notifier<AuthState> {
+  String? _sessionUid;
+  bool get _firebaseEnabled => ref.read(firebaseEnabledProvider);
+  FirebaseAuth get _auth => ref.read(firebaseAuthProvider);
+  FirebaseFirestore get _db => ref.read(authFirestoreProvider);
+
   @override
   AuthState build() {
+    if (_firebaseEnabled) {
+      final subscription = _auth.authStateChanges().listen((user) {
+        if (user == null || (_sessionUid != null && user.uid != _sessionUid)) {
+          _sessionUid = null;
+          ref.invalidate(appControllerProvider);
+          state = const AuthState(isLoading: false, isAuthenticated: false);
+        }
+      });
+      ref.onDispose(subscription.cancel);
+    }
     return const AuthState(isLoading: false, isAuthenticated: false);
   }
 
   Future<void> restoreSession() async {
+    ref.invalidate(appControllerProvider);
+    state = const AuthState(isLoading: true, isAuthenticated: false);
+    if (_firebaseEnabled) {
+      try {
+        // Wait for Firebase's persisted credential, never a preferences identity.
+        final user = await _auth.authStateChanges().first;
+        if (user == null) {
+          state = const AuthState(isLoading: false, isAuthenticated: false);
+          return;
+        }
+        await _loadFirebaseUser(user);
+      } catch (_) {
+        state = const AuthState(
+          isLoading: false,
+          isAuthenticated: false,
+          error: 'Could not verify your session. Please sign in again.',
+        );
+      }
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final roleName = prefs.getString('role');
     final email = prefs.getString('email');
@@ -78,10 +126,14 @@ class AuthController extends Notifier<AuthState> {
     final isEmailVerified = prefs.getBool('emailVerified') ?? true;
     final role = _roleFromName(roleName);
 
-    if (email == null) return;
+    if (email == null) {
+      state = const AuthState(isLoading: false, isAuthenticated: false);
+      return;
+    }
 
     state = state.copyWith(
       isAuthenticated: true,
+      isLoading: false,
       role: role,
       email: email,
       name: name ?? state.name,
@@ -90,39 +142,58 @@ class AuthController extends Notifier<AuthState> {
     );
   }
 
+  Future<void> _loadFirebaseUser(User user) async {
+    await user.reload();
+    final refreshed = _auth.currentUser;
+    if (refreshed == null) throw StateError('Session expired');
+    // Email verification in rules uses the ID token, not the cached User flag.
+    await refreshed.getIdToken(true);
+    final doc = await _db
+        .collection('users')
+        .doc(refreshed.uid)
+        .get(const GetOptions(source: Source.server));
+    final data = doc.data();
+    if (data == null || data['isActive'] != true) {
+      throw StateError('Account is missing or inactive');
+    }
+    if (_auth.currentUser?.uid != refreshed.uid) {
+      throw StateError('Account changed while loading the profile');
+    }
+    if (_sessionUid != refreshed.uid) ref.invalidate(appControllerProvider);
+    _sessionUid = refreshed.uid;
+    state = AuthState(
+      isLoading: false,
+      isAuthenticated: true,
+      role: _roleFromName(data['role'] as String?),
+      name: data['name'] as String? ?? refreshed.displayName ?? '',
+      email: refreshed.email ?? '',
+      isEmailVerified: refreshed.emailVerified,
+    );
+  }
+
   Future<void> login({required String email, required String password}) async {
+    ref.invalidate(appControllerProvider);
     if (email.trim().isEmpty || password.isEmpty) {
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
+        role: null,
         error: 'Enter your email and password.',
       );
       return;
     }
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = const AuthState(isLoading: true, isAuthenticated: false);
     try {
-      if (Firebase.apps.isNotEmpty) {
-        final credential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(email: email, password: password);
+      if (_firebaseEnabled) {
+        final credential = await _auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
         final user = credential.user;
-        if (user != null) {
-          await user.reload();
-          final refreshed = FirebaseAuth.instance.currentUser;
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(refreshed?.uid)
-              .get();
-          final data = doc.data();
-          state = state.copyWith(
-            name:
-                data?['name'] as String? ??
-                refreshed?.displayName ??
-                state.name,
-            role: _roleFromName(data?['role'] as String?),
-            isEmailVerified: refreshed?.emailVerified ?? false,
-          );
-        }
+        if (user == null) throw StateError('Missing Firebase user');
+        await _loadFirebaseUser(user);
+        return;
       }
       state = state.copyWith(
         isLoading: false,
@@ -134,12 +205,14 @@ class AuthController extends Notifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
+        role: null,
         error: _friendlyFirebaseMessage(error),
       );
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
+        role: null,
         error: 'Login failed. Please try again.',
       );
     }
@@ -151,6 +224,7 @@ class AuthController extends Notifier<AuthState> {
     required String phone,
     required String password,
   }) async {
+    ref.invalidate(appControllerProvider);
     if (name.trim().isEmpty ||
         email.trim().isEmpty ||
         phone.trim().isEmpty ||
@@ -158,21 +232,26 @@ class AuthController extends Notifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
+        role: null,
         error: 'Complete all fields and use a 6+ character password.',
       );
       return;
     }
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = const AuthState(isLoading: true, isAuthenticated: false);
     try {
       String uid = 'demo-user';
-      if (Firebase.apps.isNotEmpty) {
-        final credential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(email: email, password: password);
-        uid = credential.user?.uid ?? uid;
+      if (_firebaseEnabled) {
+        final credential = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        if (credential.user == null) throw StateError('Missing Firebase user');
+        uid = credential.user!.uid;
+        _sessionUid = uid;
         await credential.user?.updateDisplayName(name);
         await credential.user?.sendEmailVerification();
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        await _db.collection('users').doc(uid).set({
           'uid': uid,
           'role': null,
           'name': name,
@@ -185,9 +264,10 @@ class AuthController extends Notifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: true,
+        role: null,
         name: name,
         email: email,
-        isEmailVerified: Firebase.apps.isNotEmpty ? false : true,
+        isEmailVerified: !_firebaseEnabled,
       );
       await _persistSession();
     } on FirebaseException catch (error) {
@@ -216,8 +296,8 @@ class AuthController extends Notifier<AuthState> {
 
     state = state.copyWith(isLoading: true, error: null);
     try {
-      if (Firebase.apps.isNotEmpty) {
-        await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (_firebaseEnabled) {
+        await _auth.sendPasswordResetEmail(email: email);
       }
       state = state.copyWith(isLoading: false);
     } catch (error) {
@@ -226,34 +306,49 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> resendVerificationEmail() async {
-    if (Firebase.apps.isNotEmpty) {
-      await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+    if (_firebaseEnabled) {
+      await _auth.currentUser?.sendEmailVerification();
     }
   }
 
   Future<void> refreshEmailVerification() async {
-    if (Firebase.apps.isNotEmpty) {
-      await FirebaseAuth.instance.currentUser?.reload();
-      final verified =
-          FirebaseAuth.instance.currentUser?.emailVerified ?? false;
-      state = state.copyWith(isEmailVerified: verified, error: null);
-      await _persistSession();
+    if (_firebaseEnabled) {
+      try {
+        final user = _auth.currentUser;
+        if (user == null) throw StateError('Session expired');
+        await _loadFirebaseUser(user);
+      } catch (_) {
+        state = const AuthState(isLoading: false, isAuthenticated: false);
+      }
     } else {
       state = state.copyWith(isEmailVerified: true, error: null);
     }
   }
 
   Future<void> selectRole(UserRole role) async {
-    state = state.copyWith(role: role, isAuthenticated: true, error: null);
-    if (Firebase.apps.isNotEmpty) {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'role': role.firestoreValue,
-        }, SetOptions(merge: true));
-      }
+    if (!state.isAuthenticated ||
+        state.isLoading ||
+        !state.isEmailVerified ||
+        (_firebaseEnabled && (role == UserRole.admin || state.role != null))) {
+      state = state.copyWith(error: 'This role cannot be self-assigned.');
+      return;
     }
-    await _persistSession();
+    state = state.copyWith(isLoading: true);
+    try {
+      if (_firebaseEnabled) {
+        final user = _auth.currentUser;
+        if (user == null) throw StateError('Session expired');
+        await _db.collection('users').doc(user.uid).update({
+          'role': role.firestoreValue,
+        });
+        await _loadFirebaseUser(user);
+      } else {
+        state = state.copyWith(role: role, isLoading: false);
+        await _persistSession();
+      }
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Could not select role.');
+    }
   }
 
   String landingRoute() {
@@ -268,11 +363,14 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> _persistSession() async {
+    if (_firebaseEnabled) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('email', state.email);
     await prefs.setString('name', state.name);
     if (state.role != null) {
       await prefs.setString('role', state.role!.firestoreValue);
+    } else {
+      await prefs.remove('role');
     }
     await prefs.setBool('emailVerified', state.isEmailVerified);
   }
@@ -300,9 +398,10 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
-    if (Firebase.apps.isNotEmpty) {
-      await FirebaseAuth.instance.signOut();
-    }
+    _sessionUid = null;
+    ref.invalidate(appControllerProvider);
+    state = const AuthState(isLoading: false, isAuthenticated: false);
+    if (_firebaseEnabled) await _auth.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('email');
     await prefs.remove('name');

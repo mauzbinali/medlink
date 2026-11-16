@@ -14,8 +14,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await FirebaseBootstrap.initialize();
-  await NotificationService().initialize();
-  await MessagingService().initialize();
+  // Notifications are optional; unavailable native services must not block UI.
+  try {
+    await NotificationService().initialize();
+  } catch (error, stackTrace) {
+    debugPrint('Local notifications unavailable: $error\n$stackTrace');
+  }
+  try {
+    await MessagingService().initialize();
+  } catch (error, stackTrace) {
+    debugPrint('Push notifications unavailable: $error\n$stackTrace');
+  }
   runApp(const ProviderScope(child: MedLinkApp()));
 }
 

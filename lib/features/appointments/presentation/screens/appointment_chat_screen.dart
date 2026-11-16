@@ -11,6 +11,7 @@ import '../../../../shared/models/chat_message.dart';
 import '../../../../shared/state/app_state.dart';
 import '../../../../shared/widgets/medlink_app_bar.dart';
 import '../../../../shared/widgets/medlink_empty_state.dart';
+import '../../../auth/application/auth_controller.dart';
 
 class AppointmentChatScreen extends ConsumerStatefulWidget {
   const AppointmentChatScreen({required this.appointmentId, super.key});
@@ -119,7 +120,11 @@ class _AppointmentChatScreenState extends ConsumerState<AppointmentChatScreen> {
                           .read(appControllerProvider.notifier)
                           .sendChatMessage(
                             appointmentId: widget.appointmentId,
-                            sender: ChatSender.patient,
+                            sender:
+                                ref.read(authControllerProvider).role ==
+                                    UserRole.patient
+                                ? ChatSender.patient
+                                : ChatSender.clinic,
                             message: messageController.text,
                           );
                       messageController.clear();

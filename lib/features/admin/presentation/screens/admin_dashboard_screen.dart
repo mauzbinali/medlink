@@ -11,7 +11,9 @@ import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../shared/data/sample_data.dart';
 import '../../../../shared/models/appointment.dart';
 import '../../../../shared/models/payment.dart';
+import '../../../../shared/models/doctor_approval_status.dart';
 import '../../../../shared/state/app_state.dart';
+import '../widgets/patient_directory.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -38,7 +40,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         children: [
           _AdminMetrics(
-            patients: 1840 + state.appointments.length,
+            patients: patientDirectory(state.appointments).length,
             doctors: SampleData.doctors.length,
             appointments: state.appointments.length,
             revenue: revenue,
@@ -50,7 +52,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             crossAxisCount: 2,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 2.4,
+            mainAxisExtent: 64,
             children: [
               _AdminAction(
                 icon: Iconsax.people,
@@ -102,7 +104,11 @@ class AdminDashboardScreen extends ConsumerWidget {
                     ),
                     trailing: FilledButton.tonal(
                       onPressed: () => context.push(AppRoutes.adminDoctors),
-                      child: const Text('Approved'),
+                      child: Text(
+                        (state.doctorStatuses[doctor.id] ??
+                                DoctorApprovalStatus.pending)
+                            .label,
+                      ),
                     ),
                   ),
                 ),
@@ -206,7 +212,12 @@ class _AdminAction extends StatelessWidget {
           children: [
             Icon(icon, color: AppColors.primary),
             const Gap(8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
           ],
         ),
       ),
@@ -241,7 +252,7 @@ class _AdminMetrics extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 210,
-        childAspectRatio: 1.45,
+        mainAxisExtent: 150,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -256,11 +267,14 @@ class _AdminMetrics extends StatelessWidget {
               children: [
                 Icon(item.$1, color: AppColors.teal),
                 const Spacer(),
-                Text(
-                  item.$3,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    item.$3,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 Text(item.$2),

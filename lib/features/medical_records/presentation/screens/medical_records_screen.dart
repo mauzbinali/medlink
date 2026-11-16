@@ -40,7 +40,7 @@ class MedicalRecordsScreen extends ConsumerWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
               itemCount: records.length,
               itemBuilder: (context, index) {
                 final record = records[index];
@@ -132,7 +132,7 @@ class MedicalRecordsScreen extends ConsumerWidget {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return Padding(
+            return SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
                 20,
                 8,
@@ -185,6 +185,14 @@ class MedicalRecordsScreen extends ConsumerWidget {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: () {
+                        if (titleController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Enter a record title.'),
+                            ),
+                          );
+                          return;
+                        }
                         ref
                             .read(appControllerProvider.notifier)
                             .addMedicalRecord(
