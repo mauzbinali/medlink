@@ -1,8 +1,43 @@
 # MedLink
 
+https://github.com/user-attachments/assets/dc3cd6cd-0cbf-4a08-b1cc-d485103ca55c
+
 Flutter healthcare portfolio prototype with patient, doctor, and admin
 experiences, appointment workflows, and prescription/receipt PDF generation.
 It is not a production healthcare system. Use synthetic data only.
+
+## Features
+
+- Patient, Doctor, and Admin portals
+- Authentication with role-based routing and Firebase-ready services
+- Doctor search, specialty filters, and doctor profiles
+- Appointment booking, rescheduling, and cancellation
+- Doctor availability UI and appointment management
+- Prescription creation, PDF generation, download, and sharing
+- Medical record and report attachment demo screens
+- Video consultation mock UI with chat
+- Favorites, ratings, and reviews
+- Notifications and health tips
+- Responsive design with dark mode, animations, skeleton loading, and empty states
+
+## Tech Stack
+
+- Flutter and Dart
+- Riverpod for state management
+- GoRouter for navigation
+- Firebase Auth, Firestore, Storage, and Messaging
+- Hive and Shared Preferences for local storage
+- Flutter Animate, Lottie, Shimmer, and Google Fonts
+- Table Calendar and FL Chart
+
+## Screens
+
+- Splash and onboarding
+- Login, registration, forgot password, and role selection
+- Patient home, specialties, doctor listing, doctor details, and booking
+- My appointments, payments, prescriptions, and medical records
+- Doctor dashboard, availability, patient details, and prescription editor
+- Admin dashboard, user management, appointments, revenue, and health tips
 
 ## Run and Check
 
